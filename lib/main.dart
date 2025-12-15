@@ -9,6 +9,7 @@ import 'services/timetable_generator_service.dart';
 import 'screens/auth/login_screen.dart';
 
 import 'providers/time_config_provider.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const AcadSyncApp());
@@ -33,20 +34,8 @@ class AcadSyncApp extends StatelessWidget {
         builder: (context, themeProvider, child) {
           return MaterialApp(
             title: 'AcadSync',
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.deepPurple,
-                brightness: Brightness.light,
-              ),
-              useMaterial3: true,
-            ),
-            darkTheme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.deepPurple,
-                brightness: Brightness.dark,
-              ),
-              useMaterial3: true,
-            ),
+            theme: AppTheme.lightTheme,
+            darkTheme: ThemeData.dark(), // Placeholder for now
             themeMode: themeProvider.themeMode,
             home: const LoginScreen(),
           );

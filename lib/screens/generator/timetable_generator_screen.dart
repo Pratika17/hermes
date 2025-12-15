@@ -5,7 +5,8 @@ import '../../providers/faculty_provider.dart';
 import '../../providers/timetable_provider.dart';
 import '../../providers/day_order_provider.dart';
 import '../../services/timetable_generator_service.dart';
-import '../../models/timetable_slot.dart'; // Fixed Import
+import '../../models/timetable_slot.dart';
+import '../../models/subject.dart';
 import '../view/view_timetable_screen.dart'; // Added Import
 
 class TimetableGeneratorScreen extends StatefulWidget {
@@ -95,7 +96,7 @@ class _TimetableGeneratorScreenState extends State<TimetableGeneratorScreen> {
         slotsToKeep = timetableProvider.slots.where((s) => s.isManual).toList();
       }
 
-      final timetable = await generator.generate(
+      final result = await generator.generate(
         subjects: subjectProvider.subjects,
         faculties: facultyProvider.faculties,
         totalDays: dayOrderProvider.totalDayOrders,
@@ -104,28 +105,98 @@ class _TimetableGeneratorScreenState extends State<TimetableGeneratorScreen> {
         targetClassId: _selectedClass,
       );
 
-      timetableProvider.setTimetable(timetable);
+      timetableProvider.setTimetable(result.timetable);
 
       setState(() {
-        _statusMessage = 'Generation Complete!';
+        _statusMessage =
+            'Generation Complete! Score: ${(result.score * 100).toStringAsFixed(1)}%';
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Generated ${timetable.length} slots successfully!'),
-          ),
-        );
-
-        // 3. Auto-Navigate to View
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => Scaffold(
-              appBar: AppBar(title: const Text("Generated Timetable")),
-              body: ViewTimetableScreen(initialClassId: _selectedClass),
+        if (!result.isFullSuccess) {
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text("Generation Incomplete"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "We could only fill ${(result.score * 100).toStringAsFixed(1)}% of required slots.",
+                  ),
+                  if (result.unallocatedSubjects.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Text("Issues with subjects:"),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 150,
+                      width: double.maxFinite,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: result.unallocatedSubjects.length,
+                        itemBuilder: (c, i) {
+                          final subId = result.unallocatedSubjects[i];
+                          // Try to find name
+                          final sub = subjectProvider.subjects
+                              .cast<Subject?>()
+                              .firstWhere(
+                                (s) => s?.id == subId,
+                                orElse: () => null,
+                              );
+                          final name = sub?.subjectName ?? subId;
+                          return ListTile(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            leading: const Icon(
+                              Icons.warning,
+                              color: Colors.orange,
+                              size: 16,
+                            ),
+                            title: Text(
+                              name,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("View Anyway"),
+                ),
+              ],
             ),
-          ),
-        );
+          );
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Generated ${result.timetable.length} slots successfully!',
+              ),
+            ),
+          );
+
+          // 3. Auto-Navigate to View
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => Scaffold(
+                appBar: AppBar(title: const Text("Generated Timetable")),
+                body: ViewTimetableScreen(initialClassId: _selectedClass),
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       setState(() => _statusMessage = 'Error: ${e.toString()}');

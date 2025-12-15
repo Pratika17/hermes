@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/timetable_slot.dart';
 import '../providers/subject_provider.dart';
-import '../providers/time_config_provider.dart'; // Added Import
-import 'package:provider/provider.dart'; // Added
+import '../providers/time_config_provider.dart';
+import 'package:provider/provider.dart';
+import '../theme/app_theme.dart'; // Added
+import 'package:google_fonts/google_fonts.dart'; // Added
 
 class TimetableGrid extends StatelessWidget {
   final List<TimetableSlot> slots;
@@ -10,7 +12,8 @@ class TimetableGrid extends StatelessWidget {
   final int hoursPerDay;
   final String title;
   final SubjectProvider subjectProvider;
-  final String? year; // Added Year parameter
+  final String? year;
+  final bool showClassInfo;
 
   const TimetableGrid({
     super.key,
@@ -19,56 +22,14 @@ class TimetableGrid extends StatelessWidget {
     required this.hoursPerDay,
     required this.title,
     required this.subjectProvider,
-    this.year, // Optional, can default to generic
+    this.year,
+    this.showClassInfo = false, // Default to false
   });
 
   @override
   Widget build(BuildContext context) {
-    // 1. Fetch Layout from TimeConfig
-    final timeConfigProvider = Provider.of<TimeConfigProvider>(context);
-    List<TimeConfigSlot> configSlots;
-    if (year != null) {
-      configSlots = timeConfigProvider.getConfigForYear(year!);
-    } else {
-      // If no year, fallback to Year 1 or generic default
-      configSlots = timeConfigProvider.getConfigForYear('1');
-    }
-
-    // Sort logic handled in Provider? No, Provider returns List.
-    // Provider list is already ordered by user? Or we rely on index?
-    // Let's assume list order IS the display order.
-
-    // 2. Build Columns
-    final columns = [
-      const DataColumn(
-        label: Text('Day', style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
-      for (final slotConfig in configSlots)
-        DataColumn(
-          label: Container(
-            width: slotConfig.type == 'period' ? 80 : 40,
-            alignment: Alignment.center,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  slotConfig.label,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                Text(
-                  "${slotConfig.startTime}-${slotConfig.endTime}",
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-        ),
-    ];
-
+    // ... items from previous build ...
+    // NOTE: Maintain all logic from previous step, just updating _buildCell and constructor
     return Card(
       margin: const EdgeInsets.all(16),
       elevation: 4,
@@ -97,7 +58,7 @@ class TimetableGrid extends StatelessWidget {
                 ),
                 border: TableBorder.all(color: Colors.grey.shade300),
                 columnSpacing: 10,
-                columns: columns,
+                columns: _buildColumns(context),
                 rows: [
                   for (int d = 1; d <= totalDays; d++)
                     DataRow(
@@ -113,7 +74,7 @@ class TimetableGrid extends StatelessWidget {
                             ),
                           ),
                         ),
-                        for (final slotConfig in configSlots)
+                        for (final slotConfig in _getTimeConfig(context))
                           DataCell(_buildCell(context, d, slotConfig)),
                       ],
                     ),
@@ -126,11 +87,58 @@ class TimetableGrid extends StatelessWidget {
     );
   }
 
+  // Helper to fetch config (refactored for clean access in loop)
+  List<TimeConfigSlot> _getTimeConfig(BuildContext context) {
+    final timeConfigProvider = Provider.of<TimeConfigProvider>(context);
+    if (year != null) {
+      return timeConfigProvider.getConfigForYear(year!);
+    } else {
+      return timeConfigProvider.getConfigForYear('1');
+    }
+  }
+
+  List<DataColumn> _buildColumns(BuildContext context) {
+    final configSlots = _getTimeConfig(context);
+    return [
+      const DataColumn(
+        label: Text('Day', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      for (final slotConfig in configSlots)
+        DataColumn(
+          label: Container(
+            width: slotConfig.type == 'period' ? 80 : 40,
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  slotConfig.label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                Text(
+                  "${slotConfig.startTime}-${slotConfig.endTime}",
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ];
+  }
+
   Widget _buildCell(BuildContext context, int day, TimeConfigSlot slotConfig) {
     if (slotConfig.type == 'break') {
       return Container(
         alignment: Alignment.center,
-        color: Colors.grey.shade100,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: RotatedBox(
           quarterTurns: 3,
           child: Text(
@@ -147,7 +155,11 @@ class TimetableGrid extends StatelessWidget {
     if (slotConfig.type == 'lunch') {
       return Container(
         alignment: Alignment.center,
-        color: Colors.grey.shade100,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: RotatedBox(
           quarterTurns: 3,
           child: Text(
@@ -163,8 +175,7 @@ class TimetableGrid extends StatelessWidget {
     }
 
     // It's a period
-    final hour =
-        slotConfig.index; // Logic relies on index matching generator logic
+    final hour = slotConfig.index;
     TimetableSlot? slot;
     try {
       slot = slots.firstWhere((s) => s.dayOrder == day && s.hour == hour);
@@ -177,30 +188,65 @@ class TimetableGrid extends StatelessWidget {
     final subject = subjectProvider.getSubjectById(slot.subjectId);
     final displayText = subject?.subjectName ?? slot.subjectId;
 
+    // Determine Color
+    Color pillColor;
+    if (slot.isManual) {
+      pillColor = Colors.orangeAccent.shade100;
+    } else {
+      // Hash subject name/id to pick a color from AppTheme.subjectColors
+      final hash = (subject?.subjectName ?? slot.subjectId).hashCode;
+      pillColor =
+          AppTheme.subjectColors[hash.abs() % AppTheme.subjectColors.length];
+    }
+
     return Container(
       width: 80,
       height: 50,
       alignment: Alignment.center,
-      margin: const EdgeInsets.all(2),
+      margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: slot.isManual
-            ? Colors.orange.withOpacity(0.2)
-            : Theme.of(context).colorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: slot.isManual ? Colors.orange : Colors.transparent,
-        ),
+        color: pillColor,
+        borderRadius: BorderRadius.circular(16), // Pill shape
+        boxShadow: [
+          BoxShadow(
+            color: pillColor.withOpacity(0.4),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            displayText,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text(
+              displayText,
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: AppTheme.textDark,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: showClassInfo ? 2 : 3, // Reduce lines if showing class
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
+          if (showClassInfo) // Show Class ID if requested
+            Padding(
+              padding: const EdgeInsets.only(top: 2.0),
+              child: Text(
+                slot.classId,
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w400,
+                  fontSize: 9,
+                  color: AppTheme.textLight,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
         ],
       ),
     );

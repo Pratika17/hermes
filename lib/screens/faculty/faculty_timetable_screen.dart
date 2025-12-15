@@ -20,7 +20,7 @@ class _FacultyTimetableScreenState extends State<FacultyTimetableScreen> {
     final timetableProvider = Provider.of<TimetableProvider>(context);
     final dayOrderProvider = Provider.of<DayOrderProvider>(context);
     final facultyProvider = Provider.of<FacultyProvider>(context);
-    
+
     final subjectProvider = Provider.of<SubjectProvider>(context);
 
     return Column(
@@ -31,7 +31,10 @@ class _FacultyTimetableScreenState extends State<FacultyTimetableScreen> {
             value: _selectedFacultyId,
             decoration: const InputDecoration(labelText: 'Select Faculty'),
             items: facultyProvider.faculties
-                .map((f) => DropdownMenuItem(value: f.id, child: Text(f.facultyName)))
+                .map(
+                  (f) =>
+                      DropdownMenuItem(value: f.id, child: Text(f.facultyName)),
+                )
                 .toList(),
             onChanged: (val) {
               setState(() => _selectedFacultyId = val);
@@ -39,19 +42,24 @@ class _FacultyTimetableScreenState extends State<FacultyTimetableScreen> {
           ),
         ),
         if (_selectedFacultyId != null)
-           Expanded(
+          Expanded(
             child: SingleChildScrollView(
               child: TimetableGrid(
                 title: 'Timetable for Faculty',
-                slots: timetableProvider.getSlotsForFaculty(_selectedFacultyId!),
+                slots: timetableProvider.getSlotsForFaculty(
+                  _selectedFacultyId!,
+                ),
                 totalDays: dayOrderProvider.totalDayOrders,
                 hoursPerDay: dayOrderProvider.hoursPerDay,
                 subjectProvider: subjectProvider,
+                showClassInfo: true, // Enable Class Info
               ),
             ),
           )
         else
-          const Expanded(child: Center(child: Text('Please select a faculty member'))),
+          const Expanded(
+            child: Center(child: Text('Please select a faculty member')),
+          ),
       ],
     );
   }

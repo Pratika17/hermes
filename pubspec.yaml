@@ -41,6 +41,7 @@ dependencies:
   printing: ^5.14.2
   path_provider: ^2.1.5
   shared_preferences: ^2.5.4
+  google_fonts: ^6.3.3
 
 dev_dependencies:
   flutter_test:

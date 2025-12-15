@@ -1,9 +1,12 @@
 import '../models/subject.dart';
 import '../models/faculty.dart';
 import '../models/timetable_slot.dart';
+import '../models/generation_result.dart';
 
 class TimetableGeneratorService {
-  Future<List<TimetableSlot>> generate({
+  static const int _maxRetries = 10;
+
+  Future<GenerationResult> generate({
     required List<Subject> subjects,
     required List<Faculty> faculties,
     required int totalDays,
@@ -11,36 +14,114 @@ class TimetableGeneratorService {
     required List<TimetableSlot> manualSlots,
     String? targetClassId,
   }) async {
-    // 1. Initialize empty timetable
-    List<TimetableSlot> timetable = [...manualSlots];
+    GenerationResult? bestResult;
 
-    // 2. Map subjects to required slots
-    // For simplicity, we assume one class generation at a time or handle all.
-    // Here we will generate for all distinct classes found in subjects.
-    
-    // Group subjects by class (Dept-Sec-Year)
+    // Group subjects by class (Dept-Sec-Year) once
     final classGroups = _groupSubjectsByClass(subjects);
+    final classesToGenerate = targetClassId != null
+        ? [targetClassId]
+        : classGroups.keys.toList();
 
-    final classesToGenerate = targetClassId != null 
-        ? [targetClassId] 
-        : classGroups.keys;
+    for (int attempt = 0; attempt < _maxRetries; attempt++) {
+      // Randomize class order to mitigate order dependence
+      List<String> currentOrder = List.from(classesToGenerate)..shuffle();
 
-    for (var classId in classesToGenerate) {
-      if (!classGroups.containsKey(classId)) continue;
-      
-      final classSubjects = classGroups[classId]!;
-      List<TimetableSlot> classSlots = _generateForClass(
-        classId,
-        classSubjects,
+      final result = _attemptGeneration(
+        classGroups,
+        currentOrder,
         faculties,
         totalDays,
         hoursPerDay,
-        timetable, // Pass current global state to check conflicts
+        manualSlots,
       );
-      timetable.addAll(classSlots);
+
+      // Keep the best result (highest score)
+      if (bestResult == null || result.score > bestResult.score) {
+        bestResult = result;
+      }
+
+      // If we found a perfect solution, stop early
+      if (bestResult.isFullSuccess) break;
     }
 
-    return timetable;
+    return bestResult!;
+  }
+
+  GenerationResult _attemptGeneration(
+    Map<String, List<Subject>> classGroups,
+    List<String> classesOrder,
+    List<Faculty> faculties,
+    int totalDays,
+    int hoursPerDay,
+    List<TimetableSlot> manualSlots,
+  ) {
+    List<TimetableSlot> currentTimetable = [...manualSlots];
+    List<String> unallocated = [];
+    int totalHoursRequired = 0;
+    int totalHoursFilled = 0;
+
+    // Global tracking of remaining hours for this attempt
+    // Map<SubjectID, HoursRemaining>
+    Map<String, int> globalRemainingHours = {};
+
+    // Initialize remaining hours
+    for (var classId in classesOrder) {
+      final subjects = classGroups[classId] ?? [];
+      for (var s in subjects) {
+        int manualCount = manualSlots
+            .where((slot) => slot.subjectId == s.id)
+            .length;
+        int needed = s.hoursRequired - manualCount;
+        globalRemainingHours[s.id] = needed > 0 ? needed : 0;
+        totalHoursRequired += (needed > 0 ? needed : 0);
+      }
+    }
+
+    // Generate
+    List<TimetableSlot> generatedSlots = [];
+
+    for (var classId in classesOrder) {
+      if (!classGroups.containsKey(classId)) continue;
+
+      final classSubjects = classGroups[classId]!;
+
+      // Filter subjects that still need hours
+      final activeSubjects = classSubjects
+          .where((s) => globalRemainingHours[s.id]! > 0)
+          .toList();
+
+      final slots = _generateForClass(
+        classId,
+        activeSubjects,
+        faculties,
+        totalDays,
+        hoursPerDay,
+        currentTimetable, // Global state (manual + previously generated in this run)
+        globalRemainingHours, // REFERENCE to map to update decrements
+      );
+
+      generatedSlots.addAll(slots);
+      currentTimetable.addAll(slots);
+    }
+
+    totalHoursFilled = generatedSlots.length; // From THIS generation run
+
+    // Identify unallocated
+    globalRemainingHours.forEach((subjectId, remaining) {
+      if (remaining > 0) {
+        unallocated.add(subjectId);
+      }
+    });
+
+    double score = totalHoursRequired == 0
+        ? 1.0
+        : totalHoursFilled / totalHoursRequired;
+
+    return GenerationResult(
+      timetable: currentTimetable,
+      unallocatedSubjects: unallocated,
+      score: score,
+    );
   }
 
   Map<String, List<Subject>> _groupSubjectsByClass(List<Subject> subjects) {
@@ -62,19 +143,14 @@ class TimetableGeneratorService {
     int totalDays,
     int hoursPerDay,
     List<TimetableSlot> existingGlobalSlots,
+    Map<String, int> remainingHours,
   ) {
     List<TimetableSlot> newSlots = [];
-    
-    // Prepare a list of 'remaining hours' for each subject
-    Map<String, int> remainingHours = {};
-    for (var s in subjects) {
-      remainingHours[s.id] = s.hoursRequired;
-    }
 
     // Try to fill slots
     for (int day = 1; day <= totalDays; day++) {
       for (int hour = 1; hour <= hoursPerDay; hour++) {
-        // Check if this slot is already manually filled
+        // Check if this slot is already filled for this class (by manual slot)
         if (_isSlotFilled(existingGlobalSlots, classId, day, hour)) continue;
 
         // Try to find a subject that fits
@@ -89,12 +165,6 @@ class TimetableGeneratorService {
         );
 
         if (bestSubject != null) {
-          // Assign
-           // Determine faculty for this subject (assuming one faculty per subject for now, 
-           // or logic to pick one if subject has specific faculty assigned in a pivot table, 
-           // but here Subject model has facultyId? No, Subject has facultyId directly).
-           // Wait, User request said Subject has "facultyId".
-           
           final slot = TimetableSlot(
             dayOrder: day,
             hour: hour,
@@ -107,11 +177,6 @@ class TimetableGeneratorService {
         }
       }
     }
-
-    // Validation: Check if all hours are allocated ?
-    // Basic CSP might fail if constraints are too tight.
-    // For this MVP, we return what we could generate.
-    
     return newSlots;
   }
 
@@ -121,8 +186,9 @@ class TimetableGeneratorService {
     int day,
     int hour,
   ) {
-    return globalSlots.any((s) =>
-        s.classId == classId && s.dayOrder == day && s.hour == hour);
+    return globalSlots.any(
+      (s) => s.classId == classId && s.dayOrder == day && s.hour == hour,
+    );
   }
 
   Subject? _findBestSubject(
@@ -134,17 +200,27 @@ class TimetableGeneratorService {
     int day,
     int hour,
   ) {
-    // Basic heuristic: Pick subject with most remaining hours first? 
-    // Or random shuffle to vary? Let's shuffle for variety if counts are equal.
-    
+    // Candidates are subjects that still need hours
     var candidates = subjects.where((s) => remainingHours[s.id]! > 0).toList();
     if (candidates.isEmpty) return null;
 
-    candidates.shuffle();
-    candidates.sort((a, b) => remainingHours[b.id]!.compareTo(remainingHours[a.id]!));
+    // Heuristics:
+    // 1. Prioritize subjects with MORE remaining hours (tightest constraint).
+    // 2. Shuffle ensuring randomness for equal weights.
+
+    candidates.shuffle(); // Randomness
+    candidates.sort(
+      (a, b) => remainingHours[b.id]!.compareTo(remainingHours[a.id]!),
+    );
 
     for (var subject in candidates) {
-      if (!_isFacultyBusy(subject.facultyId, day, hour, globalSlots, currentClassNewSlots)) {
+      if (!_isFacultyBusy(
+        subject.facultyId,
+        day,
+        hour,
+        globalSlots,
+        currentClassNewSlots,
+      )) {
         return subject;
       }
     }
@@ -159,9 +235,16 @@ class TimetableGeneratorService {
     List<TimetableSlot> currentClassNewSlots,
   ) {
     // Check global slots (slots from manual entries AND other classes already generated)
-    bool busyInGlobal = globalSlots.any((s) =>
-        s.facultyId == facultyId && s.dayOrder == day && s.hour == hour);
-    
-    return busyInGlobal;
+    // AND check slots we just generated for this class in this run (currentClassNewSlots)
+
+    bool busyInGlobal = globalSlots.any(
+      (s) => s.facultyId == facultyId && s.dayOrder == day && s.hour == hour,
+    );
+
+    bool busyInCurrent = currentClassNewSlots.any(
+      (s) => s.facultyId == facultyId && s.dayOrder == day && s.hour == hour,
+    );
+
+    return busyInGlobal || busyInCurrent;
   }
 }
