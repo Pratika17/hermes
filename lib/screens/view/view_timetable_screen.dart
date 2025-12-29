@@ -113,21 +113,103 @@ class _ViewTimetableScreenState extends State<ViewTimetableScreen> {
         if (_selectedClass != null)
           Expanded(
             child: SingleChildScrollView(
-              child: TimetableGrid(
-                title: 'Timetable for $_selectedClass',
-                slots: timetableProvider.getSlotsForClass(_selectedClass!),
-                totalDays: dayOrderProvider.totalDayOrders,
-                hoursPerDay: dayOrderProvider.hoursPerDay,
-                subjectProvider: subjectProvider,
-                year: _selectedClass!
-                    .split('-')
-                    .last, // Assumes format Dept-Sec-Year
+              child: Column(
+                children: [
+                  TimetableGrid(
+                    title: 'Timetable for $_selectedClass',
+                    slots: timetableProvider.getSlotsForClass(_selectedClass!),
+                    totalDays: dayOrderProvider.totalDayOrders,
+                    hoursPerDay: dayOrderProvider.hoursPerDay,
+                    subjectProvider: subjectProvider,
+                    year: _selectedClass!.split('-').last,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSubjectSummary(
+                    context,
+                    timetableProvider.getSlotsForClass(_selectedClass!),
+                    subjectProvider,
+                  ),
+                  const SizedBox(height: 48), // Bottom padding
+                ],
               ),
             ),
           )
         else
           const Expanded(child: Center(child: Text('Please select a class'))),
       ],
+    );
+  }
+
+  Widget _buildSubjectSummary(
+    BuildContext context,
+    List<TimetableSlot> slots,
+    SubjectProvider subjectProvider,
+  ) {
+    if (slots.isEmpty) return const SizedBox.shrink();
+
+    // Calculate hours per subject
+    final Map<String, int> subjectHours = {};
+    for (var slot in slots) {
+      if (slot.subjectId.isNotEmpty) {
+        subjectHours[slot.subjectId] = (subjectHours[slot.subjectId] ?? 0) + 1;
+      }
+    }
+
+    final sortedSubjects = subjectHours.keys.toList()
+      ..sort((a, b) {
+        final subA = subjectProvider.getSubjectById(a);
+        final subB = subjectProvider.getSubjectById(b);
+        return (subA?.subjectName ?? a).compareTo(subB?.subjectName ?? b);
+      });
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Subject Allocation Summary',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: const [
+                    DataColumn(label: Text('Subject Name')),
+                    DataColumn(label: Text('Credits')),
+                    DataColumn(label: Text('Hours / Week')),
+                  ],
+                  rows: sortedSubjects.map((subId) {
+                    final subject = subjectProvider.getSubjectById(subId);
+                    final name = subject?.subjectName ?? subId;
+                    final credits = subject?.credits.toString() ?? '-';
+                    final hours = subjectHours[subId]!;
+
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Text(
+                            name,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        DataCell(Text(credits)),
+                        DataCell(Text('$hours hrs')),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

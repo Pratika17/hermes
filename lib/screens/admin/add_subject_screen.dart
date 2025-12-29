@@ -48,7 +48,7 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
               department: s.department,
               section: s.section,
               year: s.year,
-              hours: s.hoursRequired,
+              credits: s.credits, // Changed
               facultyId: s.facultyId,
             ),
           )
@@ -63,7 +63,7 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
           department: '',
           section: '',
           year: '',
-          hours: 0,
+          credits: 0, // Changed
           facultyId: '',
         ),
       );
@@ -104,10 +104,12 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
           );
           return;
         }
-        if (a.hours <= 0) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Hours must be > 0')));
+        if (a.credits < 0) {
+          // Changed to allow 0
+          // Changed
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Credits must be >= 0')),
+          ); // Changed
           return;
         }
       }
@@ -231,7 +233,7 @@ class _AllocationRowState extends State<_AllocationRow> {
   late TextEditingController _deptCtrl;
   late TextEditingController _secCtrl;
   late TextEditingController _yearCtrl;
-  late TextEditingController _hoursCtrl;
+  late TextEditingController _creditsCtrl; // Changed
   String? _selectedFaculty;
 
   @override
@@ -242,10 +244,13 @@ class _AllocationRowState extends State<_AllocationRow> {
     );
     _secCtrl = TextEditingController(text: widget.initialAllocation.section);
     _yearCtrl = TextEditingController(text: widget.initialAllocation.year);
-    _hoursCtrl = TextEditingController(
-      text: widget.initialAllocation.hours == 0
+    _creditsCtrl = TextEditingController(
+      // Changed
+      text:
+          widget.initialAllocation.credits ==
+              0 // Changed
           ? ''
-          : widget.initialAllocation.hours.toString(),
+          : widget.initialAllocation.credits.toString(), // Changed
     );
     _selectedFaculty = widget.initialAllocation.facultyId.isEmpty
         ? null
@@ -259,7 +264,7 @@ class _AllocationRowState extends State<_AllocationRow> {
           department: _deptCtrl.text,
           section: _secCtrl.text,
           year: _yearCtrl.text,
-          hours: int.tryParse(_hoursCtrl.text) ?? 0,
+          credits: int.tryParse(_creditsCtrl.text) ?? 0, // Changed
           facultyId: _selectedFaculty ?? '',
         ),
       );
@@ -268,7 +273,7 @@ class _AllocationRowState extends State<_AllocationRow> {
     _deptCtrl.addListener(update);
     _secCtrl.addListener(update);
     _yearCtrl.addListener(update);
-    _hoursCtrl.addListener(update);
+    _creditsCtrl.addListener(update); // Changed
   }
 
   @override
@@ -325,8 +330,10 @@ class _AllocationRowState extends State<_AllocationRow> {
               children: [
                 Expanded(
                   child: TextFormField(
-                    controller: _hoursCtrl,
-                    decoration: const InputDecoration(labelText: 'Hrs/Wk'),
+                    controller: _creditsCtrl, // Changed
+                    decoration: const InputDecoration(
+                      labelText: 'Credits',
+                    ), // Changed
                     keyboardType: TextInputType.number,
                     validator: (v) => v!.isEmpty ? 'Req' : null,
                   ),
@@ -358,7 +365,8 @@ class _AllocationRowState extends State<_AllocationRow> {
                           department: _deptCtrl.text,
                           section: _secCtrl.text,
                           year: _yearCtrl.text,
-                          hours: int.tryParse(_hoursCtrl.text) ?? 0,
+                          credits:
+                              int.tryParse(_creditsCtrl.text) ?? 0, // Changed
                           facultyId: val ?? '',
                         ),
                       );

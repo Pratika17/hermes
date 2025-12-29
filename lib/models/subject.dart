@@ -4,7 +4,7 @@ class Subject extends Equatable {
   final String id;
   final String subjectName;
   final String subjectCode;
-  final int hoursRequired;
+  final int credits; // Changed from hoursRequired
   final String facultyId;
   final String department;
   final String section;
@@ -14,7 +14,7 @@ class Subject extends Equatable {
     required this.id,
     required this.subjectName,
     required this.subjectCode,
-    required this.hoursRequired,
+    required this.credits,
     required this.facultyId,
     required this.department,
     required this.section,
@@ -26,7 +26,7 @@ class Subject extends Equatable {
       'id': id,
       'subjectName': subjectName,
       'subjectCode': subjectCode,
-      'hoursRequired': hoursRequired,
+      'credits': credits, // Changed
       'facultyId': facultyId,
       'department': department,
       'section': section,
@@ -39,7 +39,8 @@ class Subject extends Equatable {
       id: json['id'],
       subjectName: json['subjectName'],
       subjectCode: json['subjectCode'],
-      hoursRequired: json['hoursRequired'],
+      // Handle migration or fallback if 'credits' is missing but 'hoursRequired' exists
+      credits: json['credits'] ?? json['hoursRequired'] ?? 3,
       facultyId: json['facultyId'],
       department: json['department'],
       section: json['section'],
@@ -49,13 +50,13 @@ class Subject extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        subjectName,
-        subjectCode,
-        hoursRequired,
-        facultyId,
-        department,
-        section,
-        year,
-      ];
+    id,
+    subjectName,
+    subjectCode,
+    credits, // Changed
+    facultyId,
+    department,
+    section,
+    year,
+  ];
 }

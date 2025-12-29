@@ -21,12 +21,24 @@ class _TimetableGeneratorScreenState extends State<TimetableGeneratorScreen> {
   bool _isGenerating = false;
   String? _statusMessage;
   String? _selectedClass; // null means 'All Classes'
+  final _workingDaysController = TextEditingController(
+    text: '90',
+  ); // Default to 90 days
 
   void _generateTimetable() async {
     final timetableProvider = Provider.of<TimetableProvider>(
       context,
       listen: false,
     );
+
+    // Validate Working Days
+    final workingDays = int.tryParse(_workingDaysController.text);
+    if (workingDays == null || workingDays <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter valid working days > 0')),
+      );
+      return;
+    }
 
     // 1. Overwrite Check for Specific Class
     if (_selectedClass != null) {
@@ -103,6 +115,7 @@ class _TimetableGeneratorScreenState extends State<TimetableGeneratorScreen> {
         hoursPerDay: dayOrderProvider.hoursPerDay,
         manualSlots: slotsToKeep, // Pass as constraints
         targetClassId: _selectedClass,
+        workingDaysPerSemester: workingDays, // New Argument
       );
 
       timetableProvider.setTimetable(result.timetable);
@@ -208,60 +221,78 @@ class _TimetableGeneratorScreenState extends State<TimetableGeneratorScreen> {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.auto_awesome, size: 64, color: Colors.deepPurple),
-          const SizedBox(height: 24),
-          if (_isGenerating) ...[
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(_statusMessage ?? 'Processing...'),
-          ] else ...[
-            const Text(
-              'Ready to Generate Timetables',
-              style: TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 8),
-            Consumer<SubjectProvider>(
-              builder: (ctx, prov, _) {
-                final classes = prov.subjects
-                    .map((s) => "${s.department}-${s.section}-${s.year}")
-                    .toSet()
-                    .toList();
-                classes.sort();
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.auto_awesome, size: 64, color: Colors.deepPurple),
+            const SizedBox(height: 24),
+            if (_isGenerating) ...[
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(_statusMessage ?? 'Processing...'),
+            ] else ...[
+              const Text(
+                'Ready to Generate Timetables',
+                style: TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 16),
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 40.0),
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedClass,
-                    decoration: const InputDecoration(
-                      labelText: 'Target Class (Optional)',
-                      border: OutlineInputBorder(),
-                      helperText: 'Leave empty to generate for ALL classes',
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                        value: null,
-                        child: Text('All Classes'),
-                      ),
-                      ...classes.map(
-                        (c) => DropdownMenuItem(value: c, child: Text(c)),
-                      ),
-                    ],
-                    onChanged: (val) => setState(() => _selectedClass = val),
+              // New Input for Working Days
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40.0),
+                child: TextFormField(
+                  controller: _workingDaysController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Working Days per Semester',
+                    border: OutlineInputBorder(),
+                    helperText: 'Used to calculate weekly hours from credits',
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 32),
-            FilledButton.icon(
-              onPressed: _generateTimetable,
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start Generation'),
-            ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Consumer<SubjectProvider>(
+                builder: (ctx, prov, _) {
+                  final classes = prov.subjects
+                      .map((s) => "${s.department}-${s.section}-${s.year}")
+                      .toSet()
+                      .toList();
+                  classes.sort();
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40.0),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedClass,
+                      decoration: const InputDecoration(
+                        labelText: 'Target Class (Optional)',
+                        border: OutlineInputBorder(),
+                        helperText: 'Leave empty to generate for ALL classes',
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('All Classes'),
+                        ),
+                        ...classes.map(
+                          (c) => DropdownMenuItem(value: c, child: Text(c)),
+                        ),
+                      ],
+                      onChanged: (val) => setState(() => _selectedClass = val),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 32),
+              FilledButton.icon(
+                onPressed: _generateTimetable,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start Generation'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

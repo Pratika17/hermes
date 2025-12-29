@@ -8,7 +8,7 @@ class SubjectAllocation {
   final String department;
   final String section;
   final String year;
-  final int hours;
+  final int credits; // Changed
   final String facultyId;
 
   SubjectAllocation({
@@ -16,7 +16,7 @@ class SubjectAllocation {
     required this.department,
     required this.section,
     required this.year,
-    required this.hours,
+    required this.credits,
     required this.facultyId,
   });
 }
@@ -39,7 +39,10 @@ class SubjectProvider with ChangeNotifier {
   }
 
   Future<void> _saveToStorage() async {
-    await _storage.saveList(StorageService.keySubjects, _subjects.map((e) => e.toJson()).toList());
+    await _storage.saveList(
+      StorageService.keySubjects,
+      _subjects.map((e) => e.toJson()).toList(),
+    );
   }
 
   void addSubject(Subject subject) {
@@ -83,8 +86,10 @@ class SubjectProvider with ChangeNotifier {
   }) {
     // 1. Find existing subjects that belonged to this group (by oldCode)
     // If oldCode is empty, we are creating fresh.
-    final existingSubjects = oldCode.isNotEmpty ? getSubjectsByCode(oldCode) : <Subject>[];
-    
+    final existingSubjects = oldCode.isNotEmpty
+        ? getSubjectsByCode(oldCode)
+        : <Subject>[];
+
     // Track which IDs are kept/updated so we can delete the rest
     final Set<String> keptIds = {};
 
@@ -97,7 +102,7 @@ class SubjectProvider with ChangeNotifier {
             id: allocation.id!,
             subjectName: newName,
             subjectCode: newCode,
-            hoursRequired: allocation.hours,
+            credits: allocation.credits, // Changed
             facultyId: allocation.facultyId,
             department: allocation.department,
             section: allocation.section,
@@ -112,7 +117,7 @@ class SubjectProvider with ChangeNotifier {
           id: const Uuid().v4(),
           subjectName: newName,
           subjectCode: newCode,
-          hoursRequired: allocation.hours,
+          credits: allocation.credits, // Changed
           facultyId: allocation.facultyId,
           department: allocation.department,
           section: allocation.section,
