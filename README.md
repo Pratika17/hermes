@@ -93,10 +93,9 @@ AcadSync solves this by providing a **fully automated, conflict-free timetable g
 
 ### 🛠️ Tech Stack
 
-- **Frontend:** Flutter (Dart)  
-- **Backend:** *(Add if used)*  
-- **Database:** *(Add if used)*  
-- **State Management:** *(Provider / Riverpod / etc.)*  
+- **Frontend:** Flutter (Dart)   
+- **Database:** *Shared Preferences*  
+- **State Management:** *Provider*  
 
 ---
 
