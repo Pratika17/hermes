@@ -34,7 +34,7 @@ AcadSync solves this by providing a **fully automated, conflict-free timetable g
 ### 🥇 KPR Institute Paper Presentation – Winner (2024)
 
 <p align="center">
-  <img src="./presentation/images/presentationjpeg" width="400"/>
+  <img src="./presentation/images/presentation.jpeg" width="400"/>
   <img src="./presentation/images/award-stage.jpeg" width="400"/>
   <img src="./presentation/images/certificate.jpeg" width="400"/>
 </p>
